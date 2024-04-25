@@ -307,9 +307,9 @@ AC_ARG_ENABLE([werror],
     [enable_werror=no])
 
 AC_ARG_ENABLE([external-signer],
-    [AS_HELP_STRING([--enable-external-signer],[compile external signer support (default is auto, requires Boost::Process)])],
+    [AS_HELP_STRING([--enable-external-signer],[compile external signer support (default is yes)])],
     [use_external_signer=$enableval],
-    [use_external_signer=auto])
+    [use_external_signer=yes])
 
 AC_LANG_PUSH([C++])
 
@@ -626,15 +626,9 @@ AC_ARG_ENABLE([experimental-util-chainstate],
   [build_bitcoin_chainstate=$enableval],
   [build_bitcoin_chainstate=no])
 
-AC_ARG_WITH([libs],
-  [AS_HELP_STRING([--with-libs],
-  [build libraries (default=yes)])],
-  [build_bitcoin_libs=$withval],
-  [build_bitcoin_libs=yes])
-
 AC_ARG_WITH([experimental-kernel-lib],
   [AS_HELP_STRING([--with-experimental-kernel-lib],
-  [build experimental bitcoinkernel library (default is to build if we're building libraries and the experimental build-chainstate executable)])],
+  [build experimental bitcoinkernel library (default is to build if we're building the experimental build-chainstate executable)])],
   [build_experimental_kernel_lib=$withval],
   [build_experimental_kernel_lib=auto])
 
@@ -702,6 +696,9 @@ case $host in
      TARGET_OS=darwin
      if  test $cross_compiling != "yes"; then
        BUILD_OS=darwin
+
+       AX_CHECK_LINK_FLAG([-Wl,-headerpad_max_install_names], [CORE_LDFLAGS="$CORE_LDFLAGS -Wl,-headerpad_max_install_names"], [], [$LDFLAG_WERROR])
+
        AC_CHECK_PROG([BREW], [brew], [brew])
        if test "$BREW" = "brew"; then
          dnl These Homebrew packages may be keg-only, meaning that they won't be found
@@ -765,7 +762,6 @@ case $host in
            ;;
          *)
            AC_PATH_TOOL([DSYMUTIL], [dsymutil], [dsymutil])
-           AC_PATH_TOOL([INSTALL_NAME_TOOL], [install_name_tool], [install_name_tool])
            AC_PATH_TOOL([OTOOL], [otool], [otool])
            AC_PATH_PROG([ZIP], [zip], [zip])
 
@@ -778,7 +774,6 @@ case $host in
        esac
      fi
 
-     AX_CHECK_LINK_FLAG([-Wl,-headerpad_max_install_names], [CORE_LDFLAGS="$CORE_LDFLAGS -Wl,-headerpad_max_install_names"], [], [$LDFLAG_WERROR])
      CORE_CPPFLAGS="$CORE_CPPFLAGS -DMAC_OSX -DOBJC_OLD_DISPATCH_PROTOTYPES=0"
 
      dnl ignore deprecated-declarations warnings coming from objcxx code
@@ -974,24 +969,6 @@ AC_CHECK_DECLS([setsid])
 
 AC_CHECK_DECLS([pipe2])
 
-AC_CHECK_FUNCS([timingsafe_bcmp])
-
-AC_MSG_CHECKING([for __builtin_clzl])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[ ]], [[
- (void) __builtin_clzl(0);
-  ]])],
- [ AC_MSG_RESULT([yes]); have_clzl=yes; AC_DEFINE([HAVE_BUILTIN_CLZL], [1], [Define this symbol if you have __builtin_clzl])],
- [ AC_MSG_RESULT([no]); have_clzl=no;]
-)
-
-AC_MSG_CHECKING([for __builtin_clzll])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[ ]], [[
-  (void) __builtin_clzll(0);
-  ]])],
- [ AC_MSG_RESULT([yes]); have_clzll=yes; AC_DEFINE([HAVE_BUILTIN_CLZLL], [1], [Define this symbol if you have __builtin_clzll])],
- [ AC_MSG_RESULT([no]); have_clzll=no;]
-)
-
 dnl Check for malloc_info (for memory statistics information in getmemoryinfo)
 AC_MSG_CHECKING([for getmemoryinfo])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <malloc.h>]],
@@ -1091,22 +1068,6 @@ if test "$use_thread_local" = "yes" || test "$use_thread_local" = "auto"; then
   )
   LDFLAGS="$TEMP_LDFLAGS"
 fi
-
-dnl check for gmtime_r(), fallback to gmtime_s() if that is unavailable
-dnl fail if neither are available.
-AC_MSG_CHECKING([for gmtime_r])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <ctime>]],
-  [[ gmtime_r((const time_t *) nullptr, (struct tm *) nullptr); ]])],
-  [ AC_MSG_RESULT([yes]); AC_DEFINE([HAVE_GMTIME_R], [1], [Define this symbol if gmtime_r is available]) ],
-  [ AC_MSG_RESULT([no]);
-    AC_MSG_CHECKING([for gmtime_s]);
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <ctime>]],
-       [[ gmtime_s((struct tm *) nullptr, (const time_t *) nullptr); ]])],
-       [ AC_MSG_RESULT([yes])],
-       [ AC_MSG_RESULT([no]); AC_MSG_ERROR([Both gmtime_r and gmtime_s are unavailable]) ]
-    )
-  ]
-)
 
 dnl Check for different ways of gathering OS randomness
 AC_MSG_CHECKING([for Linux getrandom function])
@@ -1262,7 +1223,6 @@ if test "$enable_fuzz" = "yes"; then
   build_bitcoin_chainstate=no
   build_bitcoin_wallet=no
   build_bitcoind=no
-  build_bitcoin_libs=no
   bitcoin_enable_qt=no
   bitcoin_enable_qt_test=no
   bitcoin_enable_qt_dbus=no
@@ -1421,7 +1381,7 @@ if test "$use_boost" = "yes"; then
   dnl Check for Boost headers
   AX_BOOST_BASE([1.73.0],[],[AC_MSG_ERROR([Boost is not available!])])
   if test "$want_boost" = "no"; then
-    AC_MSG_ERROR([only libbitcoinconsensus can be built without Boost])
+    AC_MSG_ERROR([Boost is required])
   fi
 
   dnl we don't use multi_index serialization
@@ -1439,56 +1399,14 @@ if test "$use_boost" = "yes"; then
   fi
 fi
 
-if test "$use_external_signer" != "no"; then
-  AC_MSG_CHECKING([whether Boost.Process can be used])
-  TEMP_CXXFLAGS="$CXXFLAGS"
-  dnl Boost 1.78 requires the following workaround.
-  dnl See: https://github.com/boostorg/process/issues/235
-  CXXFLAGS="$CXXFLAGS -Wno-error=narrowing"
-  TEMP_CPPFLAGS="$CPPFLAGS"
-  CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
-  TEMP_LDFLAGS="$LDFLAGS"
-  dnl Boost 1.73 and older require the following workaround.
-  LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
-  AC_LINK_IFELSE([AC_LANG_PROGRAM([[
-    #define BOOST_PROCESS_USE_STD_FS
-    #include <boost/process.hpp>
-  ]],[[
-    namespace bp = boost::process;
-    bp::opstream stdin_stream;
-    bp::ipstream stdout_stream;
-    bp::child c("dummy", bp::std_out > stdout_stream, bp::std_err > stdout_stream, bp::std_in < stdin_stream);
-    stdin_stream << std::string{"test"} << std::endl;
-    if (c.running()) c.terminate();
-    c.wait();
-    c.exit_code();
-  ]])],
-    [have_boost_process="yes"],
-    [have_boost_process="no"])
-  LDFLAGS="$TEMP_LDFLAGS"
-  CPPFLAGS="$TEMP_CPPFLAGS"
-  CXXFLAGS="$TEMP_CXXFLAGS"
-  AC_MSG_RESULT([$have_boost_process])
-  if test "$have_boost_process" = "yes"; then
-    case $host in
-      dnl Boost Process for Windows uses Boost ASIO. Boost ASIO performs
-      dnl pre-main init of Windows networking libraries, which we do not
-      dnl want.
-      *mingw*)
-        use_external_signer="no"
-      ;;
-      *)
-        use_external_signer="yes"
-        AC_DEFINE([ENABLE_EXTERNAL_SIGNER], [1], [Define if external signer support is enabled])
-        AC_DEFINE([BOOST_PROCESS_USE_STD_FS], [1], [Defined to avoid Boost::Process trying to use Boost Filesystem])
-      ;;
-    esac
-  else
-    if test "$use_external_signer" = "yes"; then
-      AC_MSG_ERROR([External signing is not supported for this Boost version])
-    fi
-    use_external_signer="no";
-  fi
+case $host in
+  dnl Re-enable it after enabling Windows support in cpp-subprocess.
+  *mingw*)
+    use_external_signer="no"
+  ;;
+esac
+if test "$use_external_signer" = "yes"; then
+  AC_DEFINE([ENABLE_EXTERNAL_SIGNER], [1], [Define if external signer support is enabled])
 fi
 AM_CONDITIONAL([ENABLE_EXTERNAL_SIGNER], [test "$use_external_signer" = "yes"])
 
@@ -1635,17 +1553,7 @@ fi
 AM_CONDITIONAL([BUILD_BITCOIN_CHAINSTATE], [test $build_bitcoin_chainstate = "yes"])
 AC_MSG_RESULT($build_bitcoin_chainstate)
 
-AC_MSG_CHECKING([whether to build libraries])
-AM_CONDITIONAL([BUILD_BITCOIN_LIBS], [test $build_bitcoin_libs = "yes"])
-
-if test "$build_bitcoin_libs" = "yes"; then
-  AC_DEFINE([HAVE_CONSENSUS_LIB], [1], [Define this symbol if the consensus lib has been built])
-  AC_CONFIG_FILES([libbitcoinconsensus.pc:libbitcoinconsensus.pc.in])
-fi
-
 AM_CONDITIONAL([BUILD_BITCOIN_KERNEL_LIB], [test "$build_experimental_kernel_lib" != "no" && ( test "$build_experimental_kernel_lib" = "yes" || test "$build_bitcoin_chainstate" = "yes" )])
-
-AC_MSG_RESULT($build_bitcoin_libs)
 
 AC_LANG_POP
 
@@ -1780,8 +1688,8 @@ else
   AC_MSG_RESULT([no])
 fi
 
-if test "$build_bitcoin_wallet$build_bitcoin_cli$build_bitcoin_tx$build_bitcoin_util$build_bitcoin_libs$build_bitcoind$bitcoin_enable_qt$enable_fuzz_binary$use_bench$use_tests" = "nononononononononono"; then
-  AC_MSG_ERROR([No targets! Please specify at least one of: --with-utils --with-libs --with-daemon --with-gui --enable-fuzz(-binary) --enable-bench or --enable-tests])
+if test "$build_bitcoin_wallet$build_bitcoin_cli$build_bitcoin_tx$build_bitcoin_util$build_bitcoind$bitcoin_enable_qt$enable_fuzz_binary$use_bench$use_tests" = "nonononononononono"; then
+  AC_MSG_ERROR([No targets! Please specify at least one of: --with-utils --with-daemon --with-gui --enable-fuzz(-binary) --enable-bench or --enable-tests])
 fi
 
 AM_CONDITIONAL([TARGET_DARWIN], [test "$TARGET_OS" = "darwin"])
@@ -1813,7 +1721,6 @@ AM_CONDITIONAL([USE_UPNP], [test "$use_upnp" = "yes"])
 
 dnl for minisketch
 AM_CONDITIONAL([ENABLE_CLMUL], [test "$enable_clmul" = "yes"])
-AM_CONDITIONAL([HAVE_CLZ], [test "$have_clzl$have_clzll" = "yesyes"])
 
 AC_DEFINE([CLIENT_VERSION_MAJOR], [_CLIENT_VERSION_MAJOR], [Major version])
 AC_DEFINE([CLIENT_VERSION_MINOR], [_CLIENT_VERSION_MINOR], [Minor version])
@@ -1879,7 +1786,6 @@ AC_SUBST(MINIUPNPC_CPPFLAGS)
 AC_SUBST(MINIUPNPC_LIBS)
 AC_SUBST(NATPMP_CPPFLAGS)
 AC_SUBST(NATPMP_LIBS)
-AC_SUBST(HAVE_GMTIME_R)
 AC_SUBST(HAVE_FDATASYNC)
 AC_SUBST(HAVE_FULLFSYNC)
 AC_SUBST(HAVE_O_CLOEXEC)
@@ -1941,7 +1847,6 @@ echo
 echo "Options used to compile and link:"
 echo "  external signer = $use_external_signer"
 echo "  multiprocess    = $build_multiprocess"
-echo "  with libs       = $build_bitcoin_libs"
 echo "  with wallet     = $enable_wallet"
 if test "$enable_wallet" != "no"; then
     echo "    with sqlite   = $use_sqlite"

@@ -30,12 +30,12 @@ You can find installation instructions in the `build-*.md` file for your platfor
 | [Fontconfig](../depends/packages/fontconfig.mk) | [link](https://www.freedesktop.org/wiki/Software/fontconfig/) | [2.12.6](https://github.com/bitcoin/bitcoin/pull/23495) | 2.6 | Yes |
 | [FreeType](../depends/packages/freetype.mk) | [link](https://freetype.org) | [2.11.0](https://github.com/bitcoin/bitcoin/commit/01544dd78ccc0b0474571da854e27adef97137fb) | 2.3.0 | Yes |
 | [qrencode](../depends/packages/qrencode.mk) | [link](https://fukuchi.org/works/qrencode/) | [4.1.1](https://github.com/bitcoin/bitcoin/pull/27312) | | No |
-| [Qt](../depends/packages/qt.mk) | [link](https://download.qt.io/official_releases/qt/) | [5.15.11](https://github.com/bitcoin/bitcoin/pull/28769) | [5.11.3](https://github.com/bitcoin/bitcoin/pull/24132) | No |
+| [Qt](../depends/packages/qt.mk) | [link](https://download.qt.io/official_releases/qt/) | [5.15.13](https://github.com/bitcoin/bitcoin/pull/29732) | [5.11.3](https://github.com/bitcoin/bitcoin/pull/24132) | No |
 
 ### Networking
 | Dependency | Releases | Version used | Minimum required | Runtime |
 | --- | --- | --- | --- | --- |
-| [libnatpmp](../depends/packages/libnatpmp.mk) | [link](https://github.com/miniupnp/libnatpmp/) | commit [07004b9...](https://github.com/bitcoin/bitcoin/pull/25917) | | No |
+| [libnatpmp](../depends/packages/libnatpmp.mk) | [link](https://github.com/miniupnp/libnatpmp/) | commit [f2433be...](https://github.com/bitcoin/bitcoin/pull/29708) | | No |
 | [MiniUPnPc](../depends/packages/miniupnpc.mk) | [link](https://miniupnp.tuxfamily.org/) | [2.2.2](https://github.com/bitcoin/bitcoin/pull/20421) | 2.1 | No |
 
 ### Notifications

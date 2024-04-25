@@ -553,16 +553,12 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-torcontrol=<ip>:<port>", strprintf("Tor control host and port to use if onion listening enabled (default: %s). If no port is specified, the default port of %i will be used.", DEFAULT_TOR_CONTROL, DEFAULT_TOR_CONTROL_PORT), ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-torpassword=<pass>", "Tor control port password (default: empty)", ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::CONNECTION);
 #ifdef USE_UPNP
-#if USE_UPNP
-    argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 1 when listening and no -proxy)", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-#else
-    argsman.AddArg("-upnp", strprintf("Use UPnP to map the listening port (default: %u)", 0), ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-#endif
+    argsman.AddArg("-upnp", strprintf("Use UPnP to map the listening port (default: %u)", DEFAULT_UPNP), ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
 #else
     hidden_args.emplace_back("-upnp");
 #endif
 #ifdef USE_NATPMP
-    argsman.AddArg("-natpmp", strprintf("Use NAT-PMP to map the listening port (default: %s)", DEFAULT_NATPMP ? "1 when listening and no -proxy" : "0"), ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-natpmp", strprintf("Use NAT-PMP to map the listening port (default: %u)", DEFAULT_NATPMP), ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
 #else
     hidden_args.emplace_back("-natpmp");
 #endif // USE_NATPMP
@@ -1031,7 +1027,7 @@ bool AppInitParameterInteraction(const ArgsManager& args)
 
     if (args.IsArgSet("-test")) {
         if (chainparams.GetChainType() != ChainType::REGTEST) {
-            return InitError(Untranslated("-test=<option> should only be used in functional tests"));
+            return InitError(Untranslated("-test=<option> can only be used with regtest"));
         }
         const std::vector<std::string> options = args.GetArgs("-test");
         for (const std::string& option : options) {
@@ -1305,30 +1301,33 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         }
     }
 
-    for (const std::string port_option : {
-        "-i2psam",
-        "-onion",
-        "-proxy",
-        "-rpcbind",
-        "-torcontrol",
-        "-whitebind",
-        "-zmqpubhashblock",
-        "-zmqpubhashtx",
-        "-zmqpubrawblock",
-        "-zmqpubrawtx",
-        "-zmqpubsequence",
+    for (const auto &port_option : std::vector<std::pair<std::string, bool>>{
+        // arg name            UNIX socket support
+        {"-i2psam",                 false},
+        {"-onion",                  true},
+        {"-proxy",                  true},
+        {"-rpcbind",                false},
+        {"-torcontrol",             false},
+        {"-whitebind",              false},
+        {"-zmqpubhashblock",        true},
+        {"-zmqpubhashtx",           true},
+        {"-zmqpubrawblock",         true},
+        {"-zmqpubrawtx",            true},
+        {"-zmqpubsequence",         true}
     }) {
-        for (const std::string& socket_addr : args.GetArgs(port_option)) {
+        const std::string arg{port_option.first};
+        const bool unix{port_option.second};
+        for (const std::string& socket_addr : args.GetArgs(arg)) {
             std::string host_out;
             uint16_t port_out{0};
             if (!SplitHostPort(socket_addr, port_out, host_out)) {
 #if HAVE_SOCKADDR_UN
-                // Allow unix domain sockets for -proxy and -onion e.g. unix:/some/file/path
-                if ((port_option != "-proxy" && port_option != "-onion") || socket_addr.find(ADDR_PREFIX_UNIX) != 0) {
-                    return InitError(InvalidPortErrMsg(port_option, socket_addr));
+                // Allow unix domain sockets for some options e.g. unix:/some/file/path
+                if (!unix || socket_addr.find(ADDR_PREFIX_UNIX) != 0) {
+                    return InitError(InvalidPortErrMsg(arg, socket_addr));
                 }
 #else
-                return InitError(InvalidPortErrMsg(port_option, socket_addr));
+                return InitError(InvalidPortErrMsg(arg, socket_addr));
 #endif
             }
         }

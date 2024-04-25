@@ -39,9 +39,6 @@ LIBSECP256K1=secp256k1/libsecp256k1.la
 if ENABLE_ZMQ
 LIBBITCOIN_ZMQ=libbitcoin_zmq.a
 endif
-if BUILD_BITCOIN_LIBS
-LIBBITCOINCONSENSUS=libbitcoinconsensus.la
-endif
 if BUILD_BITCOIN_KERNEL_LIB
 LIBBITCOINKERNEL=libbitcoinkernel.la
 endif
@@ -302,6 +299,7 @@ BITCOIN_CORE_H = \
   util/error.h \
   util/exception.h \
   util/fastrange.h \
+  util/feefrac.h \
   util/fees.h \
   util/fs.h \
   util/fs_helpers.h \
@@ -322,6 +320,7 @@ BITCOIN_CORE_H = \
   util/sock.h \
   util/spanparsing.h \
   util/string.h \
+  util/subprocess.h \
   util/syserror.h \
   util/task_runner.h \
   util/thread.h \
@@ -648,7 +647,6 @@ libbitcoin_consensus_a_SOURCES = \
   primitives/transaction.h \
   pubkey.cpp \
   pubkey.h \
-  script/bitcoinconsensus.cpp \
   script/interpreter.cpp \
   script/interpreter.h \
   script/script.cpp \
@@ -741,6 +739,7 @@ libbitcoin_util_a_SOURCES = \
   util/check.cpp \
   util/error.cpp \
   util/exception.cpp \
+  util/feefrac.cpp \
   util/fees.cpp \
   util/fs.cpp \
   util/fs_helpers.cpp \
@@ -983,6 +982,7 @@ libbitcoinkernel_la_SOURCES = \
   util/batchpriority.cpp \
   util/chaintype.cpp \
   util/check.cpp \
+  util/feefrac.cpp \
   util/fs.cpp \
   util/fs_helpers.cpp \
   util/hasher.cpp \
@@ -1005,21 +1005,6 @@ libbitcoinkernel_la_SOURCES = \
 # More details: https://www.gnu.org/software/automake/manual/html_node/Built-Sources-Example.html
 libbitcoinkernel_la-clientversion.l$(OBJEXT): obj/build.h
 endif # BUILD_BITCOIN_KERNEL_LIB
-#
-
-# bitcoinconsensus library #
-if BUILD_BITCOIN_LIBS
-lib_LTLIBRARIES += $(LIBBITCOINCONSENSUS)
-
-include_HEADERS = script/bitcoinconsensus.h
-libbitcoinconsensus_la_SOURCES = support/cleanse.cpp $(crypto_libbitcoin_crypto_base_la_SOURCES) $(libbitcoin_consensus_a_SOURCES)
-
-libbitcoinconsensus_la_LDFLAGS = $(AM_LDFLAGS) -no-undefined $(RELDFLAGS)
-libbitcoinconsensus_la_LIBADD = $(LIBSECP256K1)
-libbitcoinconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -DBUILD_BITCOIN_INTERNAL -DDISABLE_OPTIMIZED_SHA256
-libbitcoinconsensus_la_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-
-endif
 #
 
 CTAES_DIST =  crypto/ctaes/bench.c

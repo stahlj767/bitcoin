@@ -511,7 +511,7 @@ public:
 
         /** Parameters for child-with-unconfirmed-parents package validation. */
         static ATMPArgs PackageChildWithParents(const CChainParams& chainparams, int64_t accept_time,
-                                                std::vector<COutPoint>& coins_to_uncache, std::optional<CFeeRate>& client_maxfeerate) {
+                                                std::vector<COutPoint>& coins_to_uncache, const std::optional<CFeeRate>& client_maxfeerate) {
             return ATMPArgs{/* m_chainparams */ chainparams,
                             /* m_accept_time */ accept_time,
                             /* m_bypass_limits */ false,
@@ -1366,7 +1366,9 @@ PackageMempoolAcceptResult MemPoolAccept::AcceptMultipleTransactions(const std::
         // Individual modified feerate exceeded caller-defined max; abort
         // N.B. this doesn't take into account CPFPs. Chunk-aware validation may be more robust.
         if (args.m_client_maxfeerate && CFeeRate(ws.m_modified_fees, ws.m_vsize) > args.m_client_maxfeerate.value()) {
-            package_state.Invalid(PackageValidationResult::PCKG_TX, "max feerate exceeded");
+            // Need to set failure here both individually and at package level
+            ws.m_state.Invalid(TxValidationResult::TX_MEMPOOL_POLICY, "max feerate exceeded", "");
+            package_state.Invalid(PackageValidationResult::PCKG_TX, "transaction failed");
             // Exit early to avoid doing pointless work. Update the failed tx result; the rest are unfinished.
             results.emplace(ws.m_ptx->GetWitnessHash(), MempoolAcceptResult::Failure(ws.m_state));
             return PackageMempoolAcceptResult(package_state, std::move(results));
@@ -1716,7 +1718,7 @@ MempoolAcceptResult AcceptToMemoryPool(Chainstate& active_chainstate, const CTra
 }
 
 PackageMempoolAcceptResult ProcessNewPackage(Chainstate& active_chainstate, CTxMemPool& pool,
-                                                   const Package& package, bool test_accept, std::optional<CFeeRate> client_maxfeerate)
+                                                   const Package& package, bool test_accept, const std::optional<CFeeRate>& client_maxfeerate)
 {
     AssertLockHeld(cs_main);
     assert(!package.empty());
@@ -5784,7 +5786,7 @@ bool ChainstateManager::PopulateAndValidateSnapshot(
     CBlockIndex* index = nullptr;
 
     // Don't make any modifications to the genesis block since it shouldn't be
-    // neccessary, and since the genesis block doesn't have normal flags like
+    // necessary, and since the genesis block doesn't have normal flags like
     // BLOCK_VALID_SCRIPTS set.
     constexpr int AFTER_GENESIS_START{1};
 
@@ -6140,13 +6142,14 @@ bool ChainstateManager::DeleteSnapshotChainstate()
     Assert(m_snapshot_chainstate);
     Assert(m_ibd_chainstate);
 
-    fs::path snapshot_datadir = GetSnapshotCoinsDBPath(*m_snapshot_chainstate);
+    fs::path snapshot_datadir = Assert(node::FindSnapshotChainstateDir(m_options.datadir)).value();
     if (!DeleteCoinsDBFromDisk(snapshot_datadir, /*is_snapshot=*/ true)) {
         LogPrintf("Deletion of %s failed. Please remove it manually to continue reindexing.\n",
                   fs::PathToString(snapshot_datadir));
         return false;
     }
     m_active_chainstate = m_ibd_chainstate.get();
+    m_active_chainstate->m_mempool = m_snapshot_chainstate->m_mempool;
     m_snapshot_chainstate.reset();
     return true;
 }
